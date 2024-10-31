@@ -1,234 +1,231 @@
 #include <iostream>
 using namespace std;
 
-struct Node
+struct Nodo
 {
     int *keys;
-    int t;
-    Node **childPointers;
-    Node *next; // Enlace entre nodos hoja
+    int g;
+    Nodo **h;
+    Nodo *next;
     int n;
     bool leaf;
 
-    Node(int t, bool leaf)
+    Nodo(int g, bool leaf)
     {
-        this->t = t;
+        this->g = g;
         this->leaf = leaf;
-        keys = new int[(2 * t) - 1];
-        childPointers = new Node *[2 * t];
+        keys = new int[(2 * g) - 1];
+        h = new Nodo *[2 * g];
         n = 0;
         next = nullptr;
     }
 };
 
-class BPlusTree
+class Arbol
 {
 public:
-    Node *root;
-    int t;
+    Nodo *root;
+    int g;
 
-    BPlusTree(int degree)
+    Arbol(int g)
     {
         root = nullptr;
-        t = degree;
+        this->g = g;
     }
 
-    // Buscar una clave en el B+ Tree
-    Node *search(Node *node, int key)
+    Nodo *find(Nodo *node, int k)
     {
-        if (!node) return nullptr;
+        if (!node)
+            return nullptr;
         int i = 0;
-        while (i < node->n && key > node->keys[i])
+        while (i < node->n && k > node->keys[i])
             i++;
-        
-        if (node->leaf)
-            return (i < node->n && node->keys[i] == key) ? node : nullptr;
 
-        return search(node->childPointers[i], key);
+        if (node->leaf)
+            return (i < node->n && node->keys[i] == k) ? node : nullptr;
+
+        return find(node->h[i], k);
     }
 
-    // Insertar una clave en el B+ Tree
-    void insert(int key)
+    void add(int k)
     {
         if (!root)
         {
-            root = new Node(t, true);
-            root->keys[0] = key;
+            root = new Nodo(g, true);
+            root->keys[0] = k;
             root->n = 1;
         }
         else
         {
-            if (root->n == (2 * t) - 1)
+            if (root->n == (2 * g) - 1)
             {
-                Node *newRoot = new Node(t, false);
-                newRoot->childPointers[0] = root;
-                splitChild(newRoot, 0, root);
+                Nodo *newRoot = new Nodo(g, false);
+                newRoot->h[0] = root;
+                split(newRoot, 0, root);
                 root = newRoot;
             }
-            insertNonFull(root, key);
+            addNode(root, k);
         }
     }
 
-    void insertNonFull(Node *node, int key)
+    void addNode(Nodo *node, int k)
     {
         int i = node->n - 1;
         if (node->leaf)
         {
-            while (i >= 0 && key < node->keys[i])
+            while (i >= 0 && k < node->keys[i])
             {
                 node->keys[i + 1] = node->keys[i];
                 i--;
             }
-            node->keys[i + 1] = key;
+            node->keys[i + 1] = k;
             node->n++;
         }
         else
         {
-            while (i >= 0 && key < node->keys[i])
+            while (i >= 0 && k < node->keys[i])
                 i--;
             i++;
-            if (node->childPointers[i]->n == (2 * t) - 1)
+            if (node->h[i]->n == (2 * g) - 1)
             {
-                splitChild(node, i, node->childPointers[i]);
-                if (key > node->keys[i])
+                split(node, i, node->h[i]);
+                if (k > node->keys[i])
                     i++;
             }
-            insertNonFull(node->childPointers[i], key);
+            addNode(node->h[i], k);
         }
     }
 
-    // Dividir un hijo de un nodo
-    void splitChild(Node *parentNode, int childIndex, Node *childNode)
+    void split(Nodo *parent, int i, Nodo *child)
     {
-        Node *newNode = new Node(t, childNode->leaf);
-        newNode->n = t - 1;
+        Nodo *newNode = new Nodo(g, child->leaf);
+        newNode->n = g - 1;
 
-        for (int j = 0; j < t - 1; j++)
-            newNode->keys[j] = childNode->keys[j + t];
+        for (int j = 0; j < g - 1; j++)
+            newNode->keys[j] = child->keys[j + g];
 
-        if (!childNode->leaf)
+        if (!child->leaf)
         {
-            for (int j = 0; j < t; j++)
-                newNode->childPointers[j] = childNode->childPointers[j + t];
+            for (int j = 0; j < g; j++)
+                newNode->h[j] = child->h[j + g];
         }
         else
         {
-            newNode->next = childNode->next;
-            childNode->next = newNode;
+            newNode->next = child->next;
+            child->next = newNode;
         }
 
-        childNode->n = t - 1;
+        child->n = g - 1;
 
-        for (int j = parentNode->n; j >= childIndex + 1; j--)
-            parentNode->childPointers[j + 1] = parentNode->childPointers[j];
+        for (int j = parent->n; j >= i + 1; j--)
+            parent->h[j + 1] = parent->h[j];
 
-        parentNode->childPointers[childIndex + 1] = newNode;
+        parent->h[i + 1] = newNode;
 
-        for (int j = parentNode->n - 1; j >= childIndex; j--)
-            parentNode->keys[j + 1] = parentNode->keys[j];
+        for (int j = parent->n - 1; j >= i; j--)
+            parent->keys[j + 1] = parent->keys[j];
 
-        parentNode->keys[childIndex] = childNode->keys[t - 1];
-        parentNode->n++;
+        parent->keys[i] = child->keys[g - 1];
+        parent->n++;
     }
 
-    // Eliminar una clave del B+ Tree
-    void remove(int key)
+    void remove(int k)
     {
         if (!root)
         {
-            cout << "El árbol está vacío." << endl;
+            cout << "Empty tree" << endl;
             return;
         }
-        removeKey(root, key);
+        remKey(root, k);
 
         if (root->n == 0)
         {
-            Node *oldRoot = root;
-            root = root->leaf ? nullptr : root->childPointers[0];
-            delete oldRoot;
+            Nodo *tmp = root;
+            root = root->leaf ? nullptr : root->h[0];
+            delete tmp;
         }
     }
 
-    void removeKey(Node *node, int key)
+    void remKey(Nodo *node, int k)
     {
-        int idx = findKeyIndex(node, key);
+        int idx = findIdx(node, k);
 
         if (node->leaf)
         {
-            if (idx < node->n && node->keys[idx] == key)
-                removeFromLeaf(node, idx);
+            if (idx < node->n && node->keys[idx] == k)
+                remLeaf(node, idx);
             return;
         }
 
-        if (idx < node->n && node->keys[idx] == key)
-            removeFromInternal(node, idx);
+        if (idx < node->n && node->keys[idx] == k)
+            remInner(node, idx);
         else
         {
-            bool isLastChild = (idx == node->n);
-            Node *childNode = node->childPointers[idx];
+            bool last = (idx == node->n);
+            Nodo *child = node->h[idx];
 
-            if (childNode->n < t)
+            if (child->n < g)
                 fill(node, idx);
 
-            if (isLastChild && idx > node->n)
-                removeKey(node->childPointers[idx - 1], key);
+            if (last && idx > node->n)
+                remKey(node->h[idx - 1], k);
             else
-                removeKey(node->childPointers[idx], key);
+                remKey(node->h[idx], k);
         }
     }
 
-    void removeFromLeaf(Node *node, int idx)
+    void remLeaf(Nodo *node, int idx)
     {
         for (int i = idx + 1; i < node->n; ++i)
             node->keys[i - 1] = node->keys[i];
         node->n--;
     }
 
-    void removeFromInternal(Node *node, int idx)
+    void remInner(Nodo *node, int idx)
     {
-        int key = node->keys[idx];
+        int k = node->keys[idx];
 
-        if (node->childPointers[idx]->n >= t)
+        if (node->h[idx]->n >= g)
         {
-            int pred = getPredecessor(node, idx);
+            int pred = getPred(node, idx);
             node->keys[idx] = pred;
-            removeKey(node->childPointers[idx], pred);
+            remKey(node->h[idx], pred);
         }
-        else if (node->childPointers[idx + 1]->n >= t)
+        else if (node->h[idx + 1]->n >= g)
         {
-            int succ = getSuccessor(node, idx);
+            int succ = getSucc(node, idx);
             node->keys[idx] = succ;
-            removeKey(node->childPointers[idx + 1], succ);
+            remKey(node->h[idx + 1], succ);
         }
         else
         {
             merge(node, idx);
-            removeKey(node->childPointers[idx], key);
+            remKey(node->h[idx], k);
         }
     }
 
-    int getPredecessor(Node *node, int idx)
+    int getPred(Nodo *node, int idx)
     {
-        Node *cur = node->childPointers[idx];
+        Nodo *cur = node->h[idx];
         while (!cur->leaf)
-            cur = cur->childPointers[cur->n];
+            cur = cur->h[cur->n];
         return cur->keys[cur->n - 1];
     }
 
-    int getSuccessor(Node *node, int idx)
+    int getSucc(Nodo *node, int idx)
     {
-        Node *cur = node->childPointers[idx + 1];
+        Nodo *cur = node->h[idx + 1];
         while (!cur->leaf)
-            cur = cur->childPointers[0];
+            cur = cur->h[0];
         return cur->keys[0];
     }
 
-    void fill(Node *node, int idx)
+    void fill(Nodo *node, int idx)
     {
-        if (idx != 0 && node->childPointers[idx - 1]->n >= t)
-            borrowFromPrev(node, idx);
-        else if (idx != node->n && node->childPointers[idx + 1]->n >= t)
-            borrowFromNext(node, idx);
+        if (idx != 0 && node->h[idx - 1]->n >= g)
+            borrowPrev(node, idx);
+        else if (idx != node->n && node->h[idx + 1]->n >= g)
+            borrowNext(node, idx);
         else
         {
             if (idx != node->n)
@@ -238,10 +235,10 @@ public:
         }
     }
 
-    void borrowFromPrev(Node *node, int idx)
+    void borrowPrev(Nodo *node, int idx)
     {
-        Node *child = node->childPointers[idx];
-        Node *sibling = node->childPointers[idx - 1];
+        Nodo *child = node->h[idx];
+        Nodo *sibling = node->h[idx - 1];
 
         for (int i = child->n - 1; i >= 0; --i)
             child->keys[i + 1] = child->keys[i];
@@ -249,13 +246,13 @@ public:
         if (!child->leaf)
         {
             for (int i = child->n; i >= 0; --i)
-                child->childPointers[i + 1] = child->childPointers[i];
+                child->h[i + 1] = child->h[i];
         }
 
         child->keys[0] = node->keys[idx - 1];
 
         if (!node->leaf)
-            child->childPointers[0] = sibling->childPointers[sibling->n];
+            child->h[0] = sibling->h[sibling->n];
 
         node->keys[idx - 1] = sibling->keys[sibling->n - 1];
 
@@ -263,15 +260,15 @@ public:
         sibling->n -= 1;
     }
 
-    void borrowFromNext(Node *node, int idx)
+    void borrowNext(Nodo *node, int idx)
     {
-        Node *child = node->childPointers[idx];
-        Node *sibling = node->childPointers[idx + 1];
+        Nodo *child = node->h[idx];
+        Nodo *sibling = node->h[idx + 1];
 
         child->keys[child->n] = node->keys[idx];
 
         if (!(child->leaf))
-            child->childPointers[child->n + 1] = sibling->childPointers[0];
+            child->h[child->n + 1] = sibling->h[0];
 
         node->keys[idx] = sibling->keys[0];
 
@@ -281,34 +278,34 @@ public:
         if (!sibling->leaf)
         {
             for (int i = 1; i <= sibling->n; ++i)
-                sibling->childPointers[i - 1] = sibling->childPointers[i];
+                sibling->h[i - 1] = sibling->h[i];
         }
 
         child->n += 1;
         sibling->n -= 1;
     }
 
-    void merge(Node *node, int idx)
+    void merge(Nodo *node, int idx)
     {
-        Node *child = node->childPointers[idx];
-        Node *sibling = node->childPointers[idx + 1];
+        Nodo *child = node->h[idx];
+        Nodo *sibling = node->h[idx + 1];
 
-        child->keys[t - 1] = node->keys[idx];
+        child->keys[g - 1] = node->keys[idx];
 
         for (int i = 0; i < sibling->n; ++i)
-            child->keys[i + t] = sibling->keys[i];
+            child->keys[i + g] = sibling->keys[i];
 
         if (!child->leaf)
         {
             for (int i = 0; i <= sibling->n; ++i)
-                child->childPointers[i + t] = sibling->childPointers[i];
+                child->h[i + g] = sibling->h[i];
         }
 
         for (int i = idx + 1; i < node->n; ++i)
             node->keys[i - 1] = node->keys[i];
 
         for (int i = idx + 2; i <= node->n; ++i)
-            node->childPointers[i - 1] = node->childPointers[i];
+            node->h[i - 1] = node->h[i];
 
         child->n += sibling->n + 1;
         node->n--;
@@ -316,10 +313,10 @@ public:
         delete sibling;
     }
 
-    int findKeyIndex(Node *node, int key)
+    int findIdx(Nodo *node, int k)
     {
         int idx = 0;
-        while (idx < node->n && node->keys[idx] < key)
+        while (idx < node->n && node->keys[idx] < k)
             ++idx;
         return idx;
     }
@@ -327,28 +324,20 @@ public:
 
 int main()
 {
-    BPlusTree bPlusTree(3); 
+    Arbol tree(3);
+    tree.add(10);
+    tree.add(20);
+    tree.add(5);
+    tree.add(6);
+    tree.add(12);
+    tree.add(30);
+    tree.add(7);
+    tree.add(17);
 
-    // Insertar claves en el B+ Tree
-    bPlusTree.insert(10);
-    bPlusTree.insert(20);
-    bPlusTree.insert(5);
-    bPlusTree.insert(6);
-    bPlusTree.insert(12);
-    bPlusTree.insert(30);
-    bPlusTree.insert(7);
-    bPlusTree.insert(17);
+    cout << "Nodo encontrado: " << (tree.find(tree.root, 6) ? "Si" : "No") << endl;
 
-    // Buscar una clave en el B+ Tree
-    Node *result = bPlusTree.search(bPlusTree.root, 6);
-    cout << (result ? "Clave encontrada" : "Clave no encontrada") << endl;
-
-    // Eliminar una clave del B+ Tree
-    bPlusTree.remove(6);
-
-    // Buscar nuevamente la clave eliminada
-    result = bPlusTree.search(bPlusTree.root, 6);
-    cout << (result ? "Clave encontrada" : "Clave no encontrada") << endl;
+    tree.remove(6);
+    cout << "Nodo no encontrado: " << (tree.find(tree.root, 6) ? "Si" : "No") << endl;
 
     return 0;
 }
