@@ -1,402 +1,432 @@
 #include <iostream>
+#include <vector>
 
 using namespace std;
 
-struct Node
+struct Nodo
 {
-    int *keys;
-    int t;
-    Node **childPointers;
+    int *claves;
+    int grado;
+    Nodo **punterosHijos;
     int n;
-    bool leaf;
+    bool hoja;
+    Nodo *siguiente;
+
+    Nodo(int gradoNodo, bool esHoja)
+    {
+        grado = gradoNodo;
+        hoja = esHoja;
+        claves = new int[2 * grado - 1];
+        punterosHijos = new Nodo *[2 * grado];
+        n = 0;
+        siguiente = nullptr;
+    }
 };
 
-class BTree
+class BPlusTree
 {
 public:
-    Node *root;
-    int t;
+    Nodo *raiz;
+    int grado;
 
-    BTree(int degree)
+    BPlusTree(int gradoArbol)
     {
-        root = nullptr;
-        t = degree;
+        raiz = nullptr;
+        grado = gradoArbol;
     }
 
-    // Crear un nuevo nodo
-    Node *createNode(bool leaf)
+    Nodo *buscar(int clave)
     {
-        Node *newNode = new Node;
-        newNode->keys = new int[(2 * t) - 1];
-        newNode->childPointers = new Node *[2 * t];
-        newNode->leaf = leaf;
-        newNode->n = 0;
-        return newNode;
+        return buscar(raiz, clave);
     }
 
-    // Buscar una llave en el BTree
-    Node *search(Node *node, int key)
+    Nodo *buscar(Nodo *nodo, int clave)
     {
         int i = 0;
-        while (i < node->n && key > node->keys[i])
+        while (i < nodo->n && clave > nodo->claves[i])
         {
             i++;
         }
-        if (node->keys[i] == key)
-        {
-            return node;
-        }
-        if (node->leaf)
-        {
-            return nullptr;
-        }
-        return search(node->childPointers[i], key);
-    }
 
-    // Insertar una llave en el BTree
-    void insert(int key)
-    {
-        if (root == nullptr)
+        if (nodo->hoja)
         {
-            root = createNode(true);
-            root->keys[0] = key;
-            root->n = 1;
-        }
-        else
-        {
-            if (root->n == (2 * t) - 1)
+            if (i < nodo->n && nodo->claves[i] == clave)
             {
-                Node *newRoot = createNode(false);
-                newRoot->childPointers[0] = root;
-                splitChild(newRoot, 0, root);
-                insertNonFull(newRoot, key);
-                root = newRoot;
+                return nodo;
             }
             else
             {
-                insertNonFull(root, key);
+                return nullptr;
+            }
+        }
+        else
+        {
+            return buscar(nodo->punterosHijos[i], clave);
+        }
+    }
+
+    void insertar(int clave)
+    {
+        if (raiz == nullptr)
+        {
+            raiz = new Nodo(grado, true);
+            raiz->claves[0] = clave;
+            raiz->n = 1;
+        }
+        else
+        {
+            if (raiz->n == 2 * grado - 1)
+            {
+                Nodo *nuevaRaiz = new Nodo(grado, false);
+                nuevaRaiz->punterosHijos[0] = raiz;
+                dividirHijo(nuevaRaiz, 0, raiz);
+                int i = 0;
+                if (nuevaRaiz->claves[0] < clave)
+                {
+                    i++;
+                }
+                insertarNoLleno(nuevaRaiz->punterosHijos[i], clave);
+                raiz = nuevaRaiz;
+            }
+            else
+            {
+                insertarNoLleno(raiz, clave);
             }
         }
     }
 
-    // Insertar en un nodo que no está lleno
-    void insertNonFull(Node *node, int key)
+    void insertarNoLleno(Nodo *nodo, int clave)
     {
-        int i = node->n - 1;
-        if (node->leaf)
+        int i = nodo->n - 1;
+
+        if (nodo->hoja)
         {
-            while (i >= 0 && key < node->keys[i])
+            while (i >= 0 && clave < nodo->claves[i])
             {
-                node->keys[i + 1] = node->keys[i];
+                nodo->claves[i + 1] = nodo->claves[i];
                 i--;
             }
-            node->keys[i + 1] = key;
-            node->n++;
+            nodo->claves[i + 1] = clave;
+            nodo->n++;
+
+            if (nodo->n == 2 * grado - 1)
+            {
+                if (nodo == raiz)
+                {
+                    Nodo *nuevaRaiz = new Nodo(grado, false);
+                    nuevaRaiz->punterosHijos[0] = raiz;
+                    dividirHijo(nuevaRaiz, 0, raiz);
+                    raiz = nuevaRaiz;
+                }
+            }
         }
         else
         {
-            while (i >= 0 && key < node->keys[i])
+            while (i >= 0 && clave < nodo->claves[i])
             {
                 i--;
             }
             i++;
-            if (node->childPointers[i]->n == (2 * t) - 1)
+            if (nodo->punterosHijos[i]->n == 2 * grado - 1)
             {
-                splitChild(node, i, node->childPointers[i]);
-                if (key > node->keys[i])
+                dividirHijo(nodo, i, nodo->punterosHijos[i]);
+                if (clave > nodo->claves[i])
                 {
                     i++;
                 }
             }
-            insertNonFull(node->childPointers[i], key);
+            insertarNoLleno(nodo->punterosHijos[i], clave);
         }
     }
 
-    // Dividir un hijo de un nodo
-    void splitChild(Node *parentNode, int childIndex, Node *childNode)
+    void dividirHijo(Nodo *nodoPadre, int indice, Nodo *nodoHijo)
     {
-        Node *newNode = createNode(childNode->leaf);
-        newNode->n = t - 1;
-        for (int j = 0; j < t - 1; j++)
+        int medio = grado - 1;
+        Nodo *nuevoNodo = new Nodo(grado, nodoHijo->hoja);
+        nuevoNodo->n = grado - 1;
+
+        for (int i = 0; i < grado - 1; i++)
         {
-            newNode->keys[j] = childNode->keys[j + t];
+            nuevoNodo->claves[i] = nodoHijo->claves[i + grado];
         }
-        if (!childNode->leaf)
+
+        if (!nodoHijo->hoja)
         {
-            for (int j = 0; j < t; j++)
+            for (int i = 0; i < grado; i++)
             {
-                newNode->childPointers[j] = childNode->childPointers[j + t];
+                nuevoNodo->punterosHijos[i] = nodoHijo->punterosHijos[i + grado];
             }
         }
-        childNode->n = t - 1;
-        for (int j = parentNode->n; j >= childIndex + 1; j--)
+        else
         {
-            parentNode->childPointers[j + 1] = parentNode->childPointers[j];
+            nuevoNodo->siguiente = nodoHijo->siguiente;
+            nodoHijo->siguiente = nuevoNodo;
         }
-        parentNode->childPointers[childIndex + 1] = newNode;
-        for (int j = parentNode->n - 1; j >= childIndex; j--)
+
+        nodoHijo->n = grado;
+
+        for (int i = nodoPadre->n; i > indice; i--)
         {
-            parentNode->keys[j + 1] = parentNode->keys[j];
+            nodoPadre->punterosHijos[i + 1] = nodoPadre->punterosHijos[i];
+            nodoPadre->claves[i] = nodoPadre->claves[i - 1];
         }
-        parentNode->keys[childIndex] = childNode->keys[t - 1];
-        parentNode->n++;
+
+        nodoPadre->punterosHijos[indice + 1] = nuevoNodo;
+        nodoPadre->claves[indice] = nuevoNodo->claves[0];
+        nodoPadre->n++;
     }
 
-    // Eliminar una llave del BTree
-    void remove(int key)
+    void eliminar(int clave)
     {
-        if (root == nullptr)
+        if (!raiz)
         {
+            cout << "El árbol B+ está vacío" << endl;
             return;
         }
-        removeKey(root, key);
-        if (root->n == 0)
+
+        eliminar(raiz, clave);
+
+        if (raiz->n == 0)
         {
-            Node *oldRoot = root;
-            if (root->leaf)
+            Nodo *tmp = raiz;
+            if (raiz->hoja)
             {
-                root = nullptr;
+                raiz = nullptr;
             }
             else
             {
-                root = root->childPointers[0];
+                raiz = raiz->punterosHijos[0];
             }
-            delete oldRoot;
+            delete tmp;
         }
     }
 
-    // Eliminar una llave de un nodo
-    void removeKey(Node *node, int key)
+    void eliminar(Nodo *nodo, int clave)
     {
-        int index = findKeyIndex(node, key);
-        if (index < node->n && node->keys[index] == key)
+        int idx = encontrarClave(nodo, clave);
+
+        if (nodo->hoja)
         {
-            if (node->leaf)
+            if (idx < nodo->n && nodo->claves[idx] == clave)
             {
-                removeKeyFromLeaf(node, index);
+                for (int i = idx; i < nodo->n - 1; i++)
+                {
+                    nodo->claves[i] = nodo->claves[i + 1];
+                }
+                nodo->n--;
             }
             else
             {
-                removeKeyFromNonLeaf(node, index);
-            }
-        }
-        else
-        {
-            if (node->leaf)
-            {
+                cout << "La clave " << clave << " no existe\n";
                 return;
             }
-            bool isLastChild = (index == node->n);
-            Node *childNode = node->childPointers[index];
-            if (childNode->n < t)
-            {
-                fillChildNode(node, index);
-            }
-            if (isLastChild && index > node->n)
-            {
-                removeKey(childNode, key);
-            }
-            else
-            {
-                removeKey(childNode, key);
-            }
-        }
-    }
-
-    // Encontrar el index de una llave en un nodo
-    int findKeyIndex(Node *node, int key)
-    {
-        int index = 0;
-        while (index < node->n && key > node->keys[index])
-        {
-            index++;
-        }
-        return index;
-    }
-
-    // Eliminar una llave de un leaf
-    void removeKeyFromLeaf(Node *node, int index)
-    {
-        for (int i = index + 1; i < node->n; i++)
-        {
-            node->keys[i - 1] = node->keys[i];
-        }
-        node->n--;
-    }
-
-    // Eliminar una llave de un nodo no leaf
-    void removeKeyFromNonLeaf(Node *node, int index)
-    {
-        int key = node->keys[index];
-        Node *predecessor = node->childPointers[index];
-        Node *successor = node->childPointers[index + 1];
-        if (predecessor->n >= t)
-        {
-            int predecessorKey = getPredecessor(predecessor);
-            node->keys[index] = predecessorKey;
-            removeKey(predecessor, predecessorKey);
-        }
-        else if (successor->n >= t)
-        {
-            int successorKey = getSuccessor(successor);
-            node->keys[index] = successorKey;
-            removeKey(successor, successorKey);
         }
         else
         {
-            mergeNodes(node, index, predecessor, successor);
-            removeKey(predecessor, key);
-        }
-    }
-
-    // Obtener el predecesor de un nodo
-    int getPredecessor(Node *node)
-    {
-        while (!node->leaf)
-        {
-            node = node->childPointers[node->n];
-        }
-        return node->keys[node->n - 1];
-    }
-
-    // Obtener el sucesor de un nodo
-    int getSuccessor(Node *node)
-    {
-        while (!node->leaf)
-        {
-            node = node->childPointers[0];
-        }
-        return node->keys[0];
-    }
-
-    // Llenar un childnode que tiene menos de t llaves
-    void fillChildNode(Node *node, int index)
-    {
-        Node *childNode = node->childPointers[index];
-        Node *leftSibling = (index != 0) ? node->childPointers[index - 1] : nullptr;
-        Node *rightSibling = (index != node->n) ? node->childPointers[index + 1] : nullptr;
-        if (leftSibling && leftSibling->n >= t)
-        {
-            borrowFromLeftSibling(node, index, childNode, leftSibling);
-        }
-        else if (rightSibling && rightSibling->n >= t)
-        {
-            borrowFromRightSibling(node, index, childNode, rightSibling);
-        }
-        else
-        {
-            if (leftSibling)
+            bool esUltimo = ((idx == nodo->n) ? true : false);
+            if (nodo->punterosHijos[idx]->n < grado)
             {
-                mergeNodes(node, index - 1, leftSibling, childNode);
+                llenar(nodo, idx);
+            }
+            if (esUltimo && idx > nodo->n)
+            {
+                eliminar(nodo->punterosHijos[idx - 1], clave);
             }
             else
             {
-                mergeNodes(node, index, childNode, rightSibling);
+                eliminar(nodo->punterosHijos[idx], clave);
             }
         }
     }
 
-    // Tomar prestada una llave de un hermano izquierdo
-    void borrowFromLeftSibling(Node *node, int index, Node *childNode, Node *leftSibling)
+    int encontrarClave(Nodo *nodo, int clave)
     {
-        for (int i = childNode->n - 1; i >= 0; i--)
+        int idx = 0;
+        while (idx < nodo->n && nodo->claves[idx] < clave)
         {
-            childNode->keys[i + 1] = childNode->keys[i];
+            ++idx;
         }
-        if (!childNode->leaf)
-        {
-            for (int i = childNode->n; i >= 0; i--)
-            {
-                childNode->childPointers[i + 1] = childNode->childPointers[i];
-            }
-        }
-        childNode->keys[0] = node->keys[index - 1];
-        if (!childNode->leaf)
-        {
-            childNode->childPointers[0] = leftSibling->childPointers[leftSibling->n];
-        }
-        node->keys[index - 1] = leftSibling->keys[leftSibling->n - 1];
-        childNode->n++;
-        leftSibling->n--;
+        return idx;
     }
 
-    // Tomar prestada una llave de un hermano derecho
-    void borrowFromRightSibling(Node *node, int index, Node *childNode, Node *rightSibling)
+    void llenar(Nodo *nodo, int idx)
     {
-        childNode->keys[childNode->n] = node->keys[index];
-        if (!childNode->leaf)
+        if (idx != 0 && nodo->punterosHijos[idx - 1]->n >= grado)
         {
-            childNode->childPointers[childNode->n + 1] = rightSibling->childPointers[0];
+            tomarPrestadoAnterior(nodo, idx);
         }
-        node->keys[index] = rightSibling->keys[0];
-        for (int i = 1; i < rightSibling->n; i++)
+        else if (idx != nodo->n && nodo->punterosHijos[idx + 1]->n >= grado)
         {
-            rightSibling->keys[i - 1] = rightSibling->keys[i];
+            tomarPrestadoSiguiente(nodo, idx);
         }
-        if (!rightSibling->leaf)
+        else
         {
-            for (int i = 1; i <= rightSibling->n; i++)
+            if (idx != nodo->n)
             {
-                rightSibling->childPointers[i - 1] = rightSibling->childPointers[i];
+                fusionar(nodo, idx);
+            }
+            else
+            {
+                fusionar(nodo, idx - 1);
             }
         }
-        childNode->n++;
-        rightSibling->n--;
     }
 
-    // Fusionar dos nodos
-    void mergeNodes(Node *parentNode, int index, Node *leftNode, Node *rightNode)
+    void tomarPrestadoAnterior(Nodo *nodo, int idx)
     {
-        leftNode->keys[leftNode->n] = parentNode->keys[index];
-        for (int i = 0; i < rightNode->n; i++)
+        Nodo *hijo = nodo->punterosHijos[idx];
+        Nodo *hermano = nodo->punterosHijos[idx - 1];
+
+        for (int i = hijo->n - 1; i >= 0; --i)
         {
-            leftNode->keys[leftNode->n + 1 + i] = rightNode->keys[i];
+            hijo->claves[i + 1] = hijo->claves[i];
         }
-        if (!leftNode->leaf)
+
+        if (!hijo->hoja)
         {
-            for (int i = 0; i <= rightNode->n; i++)
+            for (int i = hijo->n; i >= 0; --i)
             {
-                leftNode->childPointers[leftNode->n + 1 + i] = rightNode->childPointers[i];
+                hijo->punterosHijos[i + 1] = hijo->punterosHijos[i];
             }
         }
-        for (int i = index + 1; i < parentNode->n; i++)
+
+        hijo->claves[0] = nodo->claves[idx - 1];
+
+        if (!hijo->hoja)
         {
-            parentNode->keys[i - 1] = parentNode->keys[i];
+            hijo->punterosHijos[0] = hermano->punterosHijos[hermano->n];
         }
-        for (int i = index + 2; i <= parentNode->n; i++)
+
+        nodo->claves[idx - 1] = hermano->claves[hermano->n - 1];
+
+        hijo->n += 1;
+        hermano->n -= 1;
+    }
+
+    void tomarPrestadoSiguiente(Nodo *nodo, int idx)
+    {
+        Nodo *hijo = nodo->punterosHijos[idx];
+        Nodo *hermano = nodo->punterosHijos[idx + 1];
+
+        hijo->claves[hijo->n] = nodo->claves[idx];
+
+        if (!hijo->hoja)
         {
-            parentNode->childPointers[i - 1] = parentNode->childPointers[i];
+            hijo->punterosHijos[hijo->n + 1] = hermano->punterosHijos[0];
         }
-        leftNode->n += rightNode->n + 1;
-        parentNode->n--;
-        delete rightNode;
+
+        nodo->claves[idx] = hermano->claves[0];
+
+        for (int i = 1; i < hermano->n; ++i)
+        {
+            hermano->claves[i - 1] = hermano->claves[i];
+        }
+
+        if (!hermano->hoja)
+        {
+            for (int i = 1; i <= hermano->n; ++i)
+            {
+                hermano->punterosHijos[i - 1] = hermano->punterosHijos[i];
+            }
+        }
+
+        hijo->n += 1;
+        hermano->n -= 1;
+    }
+
+    void fusionar(Nodo *nodo, int idx)
+    {
+        Nodo *hijo = nodo->punterosHijos[idx];
+        Nodo *hermano = nodo->punterosHijos[idx + 1];
+
+        if (!hijo->hoja)
+        {
+            hijo->claves[grado - 1] = nodo->claves[idx];
+
+            for (int i = 0; i < hermano->n; ++i)
+            {
+                hijo->claves[i + grado] = hermano->claves[i];
+            }
+
+            for (int i = 0; i <= hermano->n; ++i)
+            {
+                hijo->punterosHijos[i + grado] = hermano->punterosHijos[i];
+            }
+        }
+        else
+        {
+            for (int i = 0; i < hermano->n; ++i)
+            {
+                hijo->claves[i + grado - 1] = hermano->claves[i];
+            }
+            hijo->siguiente = hermano->siguiente;
+        }
+
+        for (int i = idx + 1; i < nodo->n; ++i)
+        {
+            nodo->claves[i - 1] = nodo->claves[i];
+        }
+
+        for (int i = idx + 2; i <= nodo->n; ++i)
+        {
+            nodo->punterosHijos[i - 1] = nodo->punterosHijos[i];
+        }
+
+        hijo->n += hermano->n + (hijo->hoja ? 0 : 1);
+        nodo->n--;
+
+        delete hermano;
+    }
+
+    void recorrer()
+    {
+        Nodo *actual = raiz;
+        while (!actual->hoja)
+        {
+            actual = actual->punterosHijos[0];
+        }
+
+        while (actual)
+        {
+            for (int i = 0; i < actual->n; i++)
+            {
+                cout << actual->claves[i] << " ";
+            }
+            actual = actual->siguiente;
+        }
+        cout << endl;
     }
 };
 
 int main()
 {
-    BTree bTree(3); // Crear un BTree con grado 3
+    BPlusTree BPT(3);
 
-    // Insertar claves en el BTree
-    bTree.insert(10);
-    bTree.insert(20);
-    bTree.insert(30);
-    bTree.insert(40);
-    bTree.insert(50);
+    BPT.insertar(10);
+    BPT.insertar(20);
+    BPT.insertar(5);
+    BPT.insertar(6);
+    BPT.insertar(12);
+    BPT.insertar(30);
+    BPT.insertar(7);
+    BPT.insertar(17);
 
-    // Buscar una clave en el BTree
-    Node *result = bTree.search(bTree.root, 30);
-    if (result != nullptr)
+    cout << "Recorrido: ";
+    BPT.recorrer();
+
+    int clave = 6;
+    if (BPT.buscar(clave) != nullptr)
     {
-        cout << "Clave encontrada en el BTree" << endl;
+        cout << "Clave " << clave << " encontrada" << endl;
     }
     else
     {
-        cout << "Clave no encontrada en el BTree" << endl;
+        cout << "Clave " << clave << " no encontrada" << endl;
     }
 
-    // Eliminar una clave del BTree
-    bTree.remove(30);
+    BPT.eliminar(6);
+    cout << "Recorrido despues de eliminar 6: ";
+    BPT.recorrer();
 
     return 0;
 }
